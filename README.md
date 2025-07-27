@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GrowIQ Farm Dashboard
 
-## Getting Started
+GrowIQ is a real-time farm IoT dashboard built with **Next.js (TypeScript, App Router)** and **TailwindCSS**. It empowers farmers with live insights for smarter, sustainable farm management.
 
-First, run the development server:
+---
+
+## Vision
+
+Provide farmers real-time IoT data visualization to improve decisions, optimize resources, and boost productivity through an intuitive web dashboard.
+
+---
+
+## Setup & Installation
+
+1. **Create Next.js project** with `/src` directory and TypeScript:
+
+```bash
+npx create-next-app@latest growiq-dashboard -ts --src-dir
+cd growiq-dashboard
+```
+
+2. **Install TailwindCSS**:
+
+```bash
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+```
+
+3. **Configure** `tailwind.config.js`:
+
+```js
+module.exports = {
+  content: ["./src/**/*.{js,ts,jsx,tsx}"],
+  theme: { extend: {} },
+  plugins: [],
+};
+```
+
+4. **Add Tailwind directives** to `src/app/globals.css`:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional glassmorphic style */
+.glassmorphic {
+  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 8px 32px rgba(34, 197, 94, 0.13);
+}
+```
+
+5. **Run the development server**:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) to see the dashboard.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Features
 
-## Learn More
+* Live farm data from IoT sensors (soil moisture, temperature, humidity, growth progress)
+* Responsive, clean UI with progress bars and alerts
+* Field-wise detailed cards and timeline instructions
+* Easily extensible for charts, filters, and modals
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure Overview
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+growiq-dashboard/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx       # Main dashboard (Client Component)
+│   │   └── globals.css    # Tailwind + custom styles
+├── tailwind.config.js
+├── package.json
+└── README.md
+```
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Support
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open an issue for help or feature requests.
+
+---
+
+## License
+
+MIT License
+
+---
+
+Thanks for using GrowIQ!
