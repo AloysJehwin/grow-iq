@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import FieldDetailPage from "./FieldDetailPage"; // Import the separate component
+import { useState, useEffect, useRef } from "react";
+import { MessageCircle, X, Send, Bot, User, Loader2 } from "lucide-react";
 
 // ---- Type Definitions ----
 type Field = {
@@ -25,6 +25,13 @@ type FarmData = {
 type ViewState = {
   page: 'dashboard' | 'field-detail';
   selectedField?: Field;
+};
+
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
 };
 
 // ---- Main App Component ----
@@ -259,9 +266,53 @@ export default function Page() {
     );
   }
 
-  // Render field detail page using the separate component
+  // Render field detail page
   if (viewState.page === 'field-detail' && viewState.selectedField) {
-    return <FieldDetailPage field={viewState.selectedField} onBack={navigateToHome} />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-100 via-emerald-100 to-blue-100 p-8">
+        <div className="max-w-4xl mx-auto">
+          <button
+            onClick={navigateToHome}
+            className="mb-6 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            ← Back to Dashboard
+          </button>
+          <div className="bg-white/80 rounded-xl p-8 shadow-xl">
+            <h1 className="text-3xl font-bold text-emerald-900 mb-6">
+              {getCropEmoji(viewState.selectedField.crop_name)} {viewState.selectedField.crop_name} - Field {viewState.selectedField.field_id}
+            </h1>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <h2 className="text-xl font-semibold mb-4">Field Details</h2>
+                <div className="space-y-3">
+                  <p><strong>Planting Date:</strong> {formatDate(viewState.selectedField.planting_date)}</p>
+                  <p><strong>Expected Harvest:</strong> {formatDate(viewState.selectedField.expected_harvest_date)}</p>
+                  <p><strong>Days Since Planting:</strong> {viewState.selectedField.days_since_planting}</p>
+                  <p><strong>Growth Progress:</strong> {viewState.selectedField.growth_progress_percent}%</p>
+                </div>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold mb-4">Current Conditions</h2>
+                <div className="space-y-3">
+                  <p><strong>Soil Moisture:</strong> {viewState.selectedField.soil_moisture_percent}%</p>
+                  <p><strong>Temperature:</strong> {viewState.selectedField.temperature_celsius}°C</p>
+                  <p><strong>Humidity:</strong> {viewState.selectedField.humidity_percent}%</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-6">
+              <h2 className="text-xl font-semibold mb-4">Timeline Instructions</h2>
+              <ul className="list-disc list-inside space-y-2">
+                {viewState.selectedField.timeline_instructions.map((instruction, idx) => (
+                  <li key={idx} className="text-gray-700">{instruction}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+        <AIChatbot farmData={farmData} />
+      </div>
+    );
   }
 
   // Render dashboard
@@ -302,8 +353,243 @@ export default function Page() {
           </div>
         )}
       </main>
+
+      {/* AI Chatbot */}
+      <AIChatbot farmData={farmData} />
     </div>
   );
+}
+
+// ---- AI Chatbot Component ----
+function AIChatbot({ farmData }: { farmData: FarmData | null }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      role: 'assistant',
+      content: "Hi! I'm your GrowIQ farming assistant. I can help you with crop management, pest control, irrigation scheduling, and analyzing your field data. What would you like to know?",
+      timestamp: new Date()
+    }
+  ]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!inputMessage.trim()) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: inputMessage,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      // Create context from farm data
+      const farmContext = farmData ? {
+        fields: farmData.fields.map(f => ({
+          field_id: f.field_id,
+          crop: f.crop_name,
+          days_planted: f.days_since_planting,
+          progress: f.growth_progress_percent,
+          soil_moisture: f.soil_moisture_percent,
+          temperature: f.temperature_celsius,
+          humidity: f.humidity_percent,
+          next_tasks: f.timeline_instructions
+        })),
+        timestamp: farmData.timestamp
+      } : null;
+
+      // Call OpenAI API (replace with your actual API endpoint)
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: messages.slice(-5).map(m => ({ role: m.role, content: m.content })),
+          userMessage: inputMessage,
+          farmContext: farmContext
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
+      }
+
+      const data = await response.json();
+      
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.response || "I'm having trouble processing your request right now. Please try again.",
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      
+      // Fallback response when API is not available
+      const fallbackResponse = getFallbackResponse(inputMessage, farmData);
+      
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: fallbackResponse,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  return (
+    <>
+      {/* Chat Toggle Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed bottom-6 right-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full p-4 shadow-lg transition-all duration-200 z-50 hover:scale-110"
+      >
+        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
+      </button>
+
+      {/* Chat Window */}
+      {isOpen && (
+        <div className="fixed bottom-24 right-6 w-96 h-96 bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col z-40">
+          {/* Chat Header */}
+          <div className="bg-emerald-600 text-white p-4 rounded-t-lg flex items-center gap-2">
+            <Bot size={20} />
+            <h3 className="font-semibold">GrowIQ Assistant</h3>
+            <div className="ml-auto">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                {message.role === 'assistant' && (
+                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Bot size={16} className="text-emerald-600" />
+                  </div>
+                )}
+                <div
+                  className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                    message.role === 'user'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {message.content}
+                </div>
+                {message.role === 'user' && (
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User size={16} className="text-blue-600" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex gap-2 justify-start">
+                <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Bot size={16} className="text-emerald-600" />
+                </div>
+                <div className="bg-gray-100 px-3 py-2 rounded-lg">
+                  <Loader2 size={16} className="animate-spin" />
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask about your crops..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                disabled={isLoading}
+              />
+              <button
+                onClick={sendMessage}
+                disabled={isLoading || !inputMessage.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white p-2 rounded-lg transition-colors"
+              >
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---- Fallback Response Function ----
+function getFallbackResponse(message: string, farmData: FarmData | null): string {
+  const lowerMessage = message.toLowerCase();
+  
+  if (lowerMessage.includes('moisture') || lowerMessage.includes('water')) {
+    const lowMoistureFields = farmData?.fields.filter(f => f.soil_moisture_percent < 40) || [];
+    if (lowMoistureFields.length > 0) {
+      return `I notice ${lowMoistureFields.length} field(s) have low soil moisture: ${lowMoistureFields.map(f => `${f.crop_name} (${f.field_id}): ${f.soil_moisture_percent}%`).join(', ')}. Consider increasing irrigation for these crops.`;
+    }
+    return "Your soil moisture levels look generally good across most fields. Monitor daily and irrigate when levels drop below 40%.";
+  }
+  
+  if (lowerMessage.includes('temperature') || lowerMessage.includes('temp')) {
+    const hotFields = farmData?.fields.filter(f => f.temperature_celsius > 32) || [];
+    if (hotFields.length > 0) {
+      return `${hotFields.length} field(s) are experiencing high temperatures: ${hotFields.map(f => `${f.crop_name}: ${f.temperature_celsius}°C`).join(', ')}. Consider shade cloth or increased watering during hot periods.`;
+    }
+    return "Temperature levels across your fields are within normal ranges for your crops.";
+  }
+  
+  if (lowerMessage.includes('harvest') || lowerMessage.includes('ready')) {
+    const nearHarvest = farmData?.fields.filter(f => f.growth_progress_percent > 80) || [];
+    if (nearHarvest.length > 0) {
+      return `${nearHarvest.length} crop(s) are nearing harvest: ${nearHarvest.map(f => `${f.crop_name} (${f.growth_progress_percent}%)`).join(', ')}. Check daily for optimal harvest timing.`;
+    }
+    return "No crops are ready for harvest yet. Your earliest harvest is expected in the coming weeks.";
+  }
+  
+  if (lowerMessage.includes('pest') || lowerMessage.includes('disease')) {
+    return "For pest and disease management, monitor your crops daily for signs of damage. High humidity (>85%) can increase disease risk. Consider preventive spraying during favorable weather conditions.";
+  }
+  
+  // Default response
+  return "I'm here to help with your farming questions! I can provide insights about irrigation, pest control, harvest timing, and crop management based on your field data. What specific aspect would you like to discuss?";
 }
 
 // ---- Field Card Component ----
